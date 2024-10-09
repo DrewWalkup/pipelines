@@ -73,7 +73,7 @@ class Pipeline:
                     }
                     for model in models
                     if "generateContent" in model.supported_generation_methods
-                    if model.name[:7] == "models/" and "latest" in model.name.lower() and "1.5" in model.name or "1-5" in model.name
+                    if model.name[:7] == "models/" and "latest" in model.name.lower() and ("1.5" in model.name or "1-5" in model.name)
                 ]
             except Exception:
                 self.pipelines = [
