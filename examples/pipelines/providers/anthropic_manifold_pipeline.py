@@ -39,6 +39,7 @@ class Pipeline:
         self.update_headers()
 
     # Rundown Functions
+    @staticmethod
     def get_tokens(text):
         """
         Function to get total # of tokens in a given message.
@@ -147,7 +148,16 @@ class Pipeline:
 
                 # Check for Claude model and token count
                 if model_id == "claude-3-5-sonnet-20240620":
-                    msg_tokens = self.get_tokens(message.get("content", ""))
+                    msg_text = message.get("content", "")
+                    if isinstance(msg_text, list):
+                        msg_text = " ".join(
+                            [
+                                item.get("text", "")
+                                for item in msg_text
+                                if item.get("type") == "text"
+                            ]
+                        )
+                    msg_tokens = Pipeline.get_tokens(msg_text)
                     if msg_tokens >= 1024:
                         processed_content[0]["cache_control"] = {"type": "ephemeral"}
                         self.cached = True
@@ -162,7 +172,7 @@ class Pipeline:
                     system_message_parts = system_message.split("\n")
                     for part in system_message_parts:
                         system_message_list.append({"type": "text", "text": part})
-                        if self.get_tokens(part) >= 1024:
+                        if Pipeline.get_tokens(part) >= 1024:
                             system_message_list[-1]["cache_control"] = {
                                 "type": "ephemeral"
                             }
