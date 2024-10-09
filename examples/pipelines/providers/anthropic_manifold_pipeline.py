@@ -110,14 +110,24 @@ class Pipeline:
             image_count = 0
             total_image_size = 0
 
+            # Process system message
+            if system_message:
+                system_tokens = self.get_tokens(system_message)
+                system_content = [{"type": "text", "text": system_message}]
+                if system_tokens >= 1024:
+                    system_content[0]["cache_control"] = {"type": "ephemeral"}
+                    self.cached = True
+
             for message in messages:
                 processed_content = []
                 if isinstance(message.get("content"), list):
                     for item in message["content"]:
                         if item["type"] == "text":
-                            processed_content.append(
-                                {"type": "text", "text": item["text"]}
-                            )
+                            text_content = {"type": "text", "text": item["text"]}
+                            if self.get_tokens(item["text"]) >= 1024:
+                                text_content["cache_control"] = {"type": "ephemeral"}
+                                self.cached = True
+                            processed_content.append(text_content)
                         elif item["type"] == "image_url":
                             if image_count >= 5:
                                 raise ValueError(
@@ -142,86 +152,33 @@ class Pipeline:
 
                             image_count += 1
                 else:
-                    processed_content = [
-                        {"type": "text", "text": message.get("content", "")}
-                    ]
-
-                # Check for Claude model and token count
-                if model_id == "claude-3-5-sonnet-20240620":
-                    msg_text = message.get("content", "")
-                    if isinstance(msg_text, list):
-                        msg_text = " ".join(
-                            [
-                                item.get("text", "")
-                                for item in msg_text
-                                if item.get("type") == "text"
-                            ]
-                        )
-                    msg_tokens = Pipeline.get_tokens(msg_text)
-                    if msg_tokens >= 1024:
-                        processed_content[0]["cache_control"] = {"type": "ephemeral"}
+                    text_content = {"type": "text", "text": message.get("content", "")}
+                    if self.get_tokens(message.get("content", "")) >= 1024:
+                        text_content["cache_control"] = {"type": "ephemeral"}
                         self.cached = True
+                    processed_content = [text_content]
 
                 processed_messages.append(
                     {"role": message["role"], "content": processed_content}
                 )
-            # Prepare the system message as a list of objects
-            if self.cached:
-                system_message_list = []
-                if system_message:
-                    if isinstance(system_message, str):
-                        system_message_parts = system_message.split("\n")
-                        for part in system_message_parts:
-                            system_message_list.append({"type": "text", "text": part})
-                            if Pipeline.get_tokens(part) >= 1024:
-                                system_message_list[-1]["cache_control"] = {
-                                    "type": "ephemeral"
-                                }
-                    elif isinstance(system_message, dict):
-                        system_message_list.append(system_message)
-                        if Pipeline.get_tokens(system_message.get("text", "")) >= 1024:
-                            system_message_list[-1]["cache_control"] = {
-                                "type": "ephemeral"
-                            }
-                    elif isinstance(system_message, list):
-                        for item in system_message:
-                            system_message_list.append(item)
-                            if (
-                                isinstance(item, dict)
-                                and Pipeline.get_tokens(item.get("text", "")) >= 1024
-                            ):
-                                system_message_list[-1]["cache_control"] = {
-                                    "type": "ephemeral"
-                                }
 
             # Prepare the payload
+            payload = {
+                "model": model_id,
+                "messages": processed_messages,
+                "max_tokens": body.get("max_tokens", 4096),
+                "temperature": body.get("temperature", 0.8),
+                "top_k": body.get("top_k", 40),
+                "top_p": body.get("top_p", 0.9),
+                "stop_sequences": body.get("stop", []),
+                "system": system_content if system_message else None,
+                "stream": body.get("stream", False),
+            }
+
             if self.cached:
-                payload = {
-                    "model": model_id,
-                    "messages": processed_messages,
-                    "max_tokens": body.get("max_tokens", 4096),
-                    "temperature": body.get("temperature", 0.8),
-                    "top_k": body.get("top_k", 40),
-                    "top_p": body.get("top_p", 0.9),
-                    "stop_sequences": body.get("stop", []),
-                    "system": system_message_list if system_message_list else None,
-                    "stream": body.get("stream", False),
-                }
                 payload["extra_headers"] = {
                     "anthropic-version": "2023-06-01",
                     "anthropic-beta": "prompt-caching-2024-07-31",
-                }
-            else:
-                payload = {
-                    "model": model_id,
-                    "messages": processed_messages,
-                    "max_tokens": body.get("max_tokens", 4096),
-                    "temperature": body.get("temperature", 0.8),
-                    "top_k": body.get("top_k", 40),
-                    "top_p": body.get("top_p", 0.9),
-                    "stop_sequences": body.get("stop", []),
-                    **({"system": str(system_message)} if system_message else {}),
-                    "stream": body.get("stream", False),
                 }
 
             if body.get("stream", False):
