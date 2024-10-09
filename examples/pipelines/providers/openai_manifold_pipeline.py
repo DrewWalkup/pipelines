@@ -70,11 +70,11 @@ class Pipeline:
                     for model in models["data"]
                     if "gpt" in model["id"]
                     and any(
-                        allowed_model in model["name"]
+                        allowed_model in model["id"]
                         for allowed_model in allowed_models_loose
                     )
                     or any(
-                        model["name"] == allowed_model
+                        model["id"] == allowed_model
                         for allowed_model in allowed_models_exact
                     )
                 ]
