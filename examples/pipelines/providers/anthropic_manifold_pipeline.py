@@ -169,13 +169,30 @@ class Pipeline:
             if self.cached:
                 system_message_list = []
                 if system_message:
-                    system_message_parts = system_message.split("\n")
-                    for part in system_message_parts:
-                        system_message_list.append({"type": "text", "text": part})
-                        if Pipeline.get_tokens(part) >= 1024:
+                    if isinstance(system_message, str):
+                        system_message_parts = system_message.split("\n")
+                        for part in system_message_parts:
+                            system_message_list.append({"type": "text", "text": part})
+                            if Pipeline.get_tokens(part) >= 1024:
+                                system_message_list[-1]["cache_control"] = {
+                                    "type": "ephemeral"
+                                }
+                    elif isinstance(system_message, dict):
+                        system_message_list.append(system_message)
+                        if Pipeline.get_tokens(system_message.get("text", "")) >= 1024:
                             system_message_list[-1]["cache_control"] = {
                                 "type": "ephemeral"
                             }
+                    elif isinstance(system_message, list):
+                        for item in system_message:
+                            system_message_list.append(item)
+                            if (
+                                isinstance(item, dict)
+                                and Pipeline.get_tokens(item.get("text", "")) >= 1024
+                            ):
+                                system_message_list[-1]["cache_control"] = {
+                                    "type": "ephemeral"
+                                }
 
             # Prepare the payload
             if self.cached:
@@ -187,7 +204,7 @@ class Pipeline:
                     "top_k": body.get("top_k", 40),
                     "top_p": body.get("top_p", 0.9),
                     "stop_sequences": body.get("stop", []),
-                    "system": system_message_list,  # Use the new system message list
+                    "system": system_message_list if system_message_list else None,
                     "stream": body.get("stream", False),
                 }
                 payload["extra_headers"] = {
