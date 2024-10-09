@@ -1,7 +1,7 @@
 """
 title: Anthropic Manifold Pipeline
-author: justinh-rahb, sriparashiva
-date: 2024-06-20
+author: justinh-rahb, sriparashiva, rundown
+date: 2024-10-08
 version: 1.4
 license: MIT
 description: A pipeline for generating text and processing images using the Anthropic API.
@@ -37,7 +37,7 @@ class Pipeline:
         self.url = "https://api.anthropic.com/v1/messages"
         self.update_headers()
 
-    # Rundown Functions
+    # Token count function for caching
     @staticmethod
     def get_tokens(text):
         """
@@ -115,11 +115,13 @@ class Pipeline:
                 if isinstance(message.get("content"), list):
                     for item in message["content"]:
                         if item["type"] == "text":
+                            # Check for caching
                             text_content = {"type": "text", "text": item["text"]}
                             if (
                                 model_id == "claude-3-5-sonnet-20240620"
                                 and self.get_tokens(item["text"]) >= 1024
                             ):
+                                # Add cache type
                                 text_content["cache_control"] = {"type": "ephemeral"}
                                 cached = True
                             processed_content.append(text_content)
@@ -147,12 +149,14 @@ class Pipeline:
 
                             image_count += 1
                 else:
+                    # Check for caching
                     text = message.get("content", "")
                     text_content = {"type": "text", "text": text}
                     if (
                         model_id == "claude-3-5-sonnet-20240620"
                         and self.get_tokens(text) >= 1024
                     ):
+                        # Add cache type
                         text_content["cache_control"] = {"type": "ephemeral"}
                         cached = True
                     processed_content = [text_content]
@@ -174,6 +178,7 @@ class Pipeline:
                 "stream": body.get("stream", False),
             }
 
+            # Add caching headers
             if cached:
                 self.headers["anthropic-beta"] = "prompt-caching-2024-07-31"
 
