@@ -60,6 +60,8 @@ class Pipeline:
                 )
 
                 models = r.json()
+                allowed_models_exact = ["gpt-4o", "gpt-4o-mini"]
+                allowed_models_loose = ["gpt-4o-realtime", "o1"]
                 return [
                     {
                         "id": model["id"],
@@ -67,6 +69,14 @@ class Pipeline:
                     }
                     for model in models["data"]
                     if "gpt" in model["id"]
+                    and any(
+                        allowed_model in model["name"]
+                        for allowed_model in allowed_models_loose
+                    )
+                    or any(
+                        model["name"] == allowed_model
+                        for allowed_model in allowed_models_exact
+                    )
                 ]
 
             except Exception as e:
