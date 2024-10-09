@@ -109,14 +109,7 @@ class Pipeline:
             processed_messages = []
             image_count = 0
             total_image_size = 0
-
-            # Process system message
-            if system_message:
-                system_tokens = self.get_tokens(system_message)
-                system_content = [{"type": "text", "text": system_message}]
-                if system_tokens >= 1024:
-                    system_content[0]["cache_control"] = {"type": "ephemeral"}
-                    self.cached = True
+            self.cached = False
 
             for message in messages:
                 processed_content = []
@@ -124,7 +117,10 @@ class Pipeline:
                     for item in message["content"]:
                         if item["type"] == "text":
                             text_content = {"type": "text", "text": item["text"]}
-                            if self.get_tokens(item["text"]) >= 1024:
+                            if (
+                                model_id == "claude-3-5-sonnet-20240620"
+                                and self.get_tokens(item["text"]) >= 1024
+                            ):
                                 text_content["cache_control"] = {"type": "ephemeral"}
                                 self.cached = True
                             processed_content.append(text_content)
@@ -152,8 +148,12 @@ class Pipeline:
 
                             image_count += 1
                 else:
-                    text_content = {"type": "text", "text": message.get("content", "")}
-                    if self.get_tokens(message.get("content", "")) >= 1024:
+                    text = message.get("content", "")
+                    text_content = {"type": "text", "text": text}
+                    if (
+                        model_id == "claude-3-5-sonnet-20240620"
+                        and self.get_tokens(text) >= 1024
+                    ):
                         text_content["cache_control"] = {"type": "ephemeral"}
                         self.cached = True
                     processed_content = [text_content]
@@ -171,7 +171,7 @@ class Pipeline:
                 "top_k": body.get("top_k", 40),
                 "top_p": body.get("top_p", 0.9),
                 "stop_sequences": body.get("stop", []),
-                "system": system_content if system_message else None,
+                **({"system": str(system_message)} if system_message else {}),
                 "stream": body.get("stream", False),
             }
 
