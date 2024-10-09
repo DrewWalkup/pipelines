@@ -16,6 +16,9 @@ from typing import List, Union, Generator, Iterator
 from pydantic import BaseModel
 import sseclient
 
+# Rundown Imports
+import tiktoken
+
 from utils.pipelines.main import pop_system_message
 
 
@@ -27,18 +30,29 @@ class Pipeline:
         self.type = "manifold"
         self.id = "anthropic"
         self.name = "anthropic/"
+        self.cached = False
 
         self.valves = self.Valves(
             **{"ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "your-api-key-here")}
         )
-        self.url = 'https://api.anthropic.com/v1/messages'
+        self.url = "https://api.anthropic.com/v1/messages"
         self.update_headers()
+
+    # Rundown Functions
+    def get_tokens(text):
+        """
+        Function to get total # of tokens in a given message.
+        """
+        encoding = tiktoken.encoding_for_model("gpt-4o")
+        system_tokens = len(encoding.encode(text))
+
+        return system_tokens
 
     def update_headers(self):
         self.headers = {
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'x-api-key': self.valves.ANTHROPIC_API_KEY
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+            "x-api-key": self.valves.ANTHROPIC_API_KEY,
         }
 
     def get_anthropic_models(self):
@@ -86,7 +100,7 @@ class Pipeline:
     ) -> Union[str, Generator, Iterator]:
         try:
             # Remove unnecessary keys
-            for key in ['user', 'chat_id', 'title']:
+            for key in ["user", "chat_id", "title"]:
                 body.pop(key, None)
 
             system_message, messages = pop_system_message(messages)
@@ -100,41 +114,88 @@ class Pipeline:
                 if isinstance(message.get("content"), list):
                     for item in message["content"]:
                         if item["type"] == "text":
-                            processed_content.append({"type": "text", "text": item["text"]})
+                            processed_content.append(
+                                {"type": "text", "text": item["text"]}
+                            )
                         elif item["type"] == "image_url":
                             if image_count >= 5:
-                                raise ValueError("Maximum of 5 images per API call exceeded")
+                                raise ValueError(
+                                    "Maximum of 5 images per API call exceeded"
+                                )
 
                             processed_image = self.process_image(item["image_url"])
                             processed_content.append(processed_image)
 
                             if processed_image["source"]["type"] == "base64":
-                                image_size = len(processed_image["source"]["data"]) * 3 / 4
+                                image_size = (
+                                    len(processed_image["source"]["data"]) * 3 / 4
+                                )
                             else:
                                 image_size = 0
 
                             total_image_size += image_size
                             if total_image_size > 100 * 1024 * 1024:
-                                raise ValueError("Total size of images exceeds 100 MB limit")
+                                raise ValueError(
+                                    "Total size of images exceeds 100 MB limit"
+                                )
 
                             image_count += 1
                 else:
-                    processed_content = [{"type": "text", "text": message.get("content", "")}]
+                    processed_content = [
+                        {"type": "text", "text": message.get("content", "")}
+                    ]
 
-                processed_messages.append({"role": message["role"], "content": processed_content})
+                # Check for Claude model and token count
+                if model_id == "claude-3-5-sonnet-20240620":
+                    msg_tokens = self.get_tokens(message.get("content", ""))
+                    if msg_tokens >= 1024:
+                        processed_content[0]["cache_control"] = {"type": "ephemeral"}
+                        self.cached = True
+
+                processed_messages.append(
+                    {"role": message["role"], "content": processed_content}
+                )
+            # Prepare the system message as a list of objects
+            if self.cached:
+                system_message_list = []
+                if system_message:
+                    system_message_parts = system_message.split("\n")
+                    for part in system_message_parts:
+                        system_message_list.append({"type": "text", "text": part})
+                        if self.get_tokens(part) >= 1024:
+                            system_message_list[-1]["cache_control"] = {
+                                "type": "ephemeral"
+                            }
 
             # Prepare the payload
-            payload = {
-                "model": model_id,
-                "messages": processed_messages,
-                "max_tokens": body.get("max_tokens", 4096),
-                "temperature": body.get("temperature", 0.8),
-                "top_k": body.get("top_k", 40),
-                "top_p": body.get("top_p", 0.9),
-                "stop_sequences": body.get("stop", []),
-                **({"system": str(system_message)} if system_message else {}),
-                "stream": body.get("stream", False),
-            }
+            if self.cached:
+                payload = {
+                    "model": model_id,
+                    "messages": processed_messages,
+                    "max_tokens": body.get("max_tokens", 4096),
+                    "temperature": body.get("temperature", 0.8),
+                    "top_k": body.get("top_k", 40),
+                    "top_p": body.get("top_p", 0.9),
+                    "stop_sequences": body.get("stop", []),
+                    "system": system_message_list,  # Use the new system message list
+                    "stream": body.get("stream", False),
+                }
+                payload["extra_headers"] = {
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta": "prompt-caching-2024-07-31",
+                }
+            else:
+                payload = {
+                    "model": model_id,
+                    "messages": processed_messages,
+                    "max_tokens": body.get("max_tokens", 4096),
+                    "temperature": body.get("temperature", 0.8),
+                    "top_k": body.get("top_k", 40),
+                    "top_p": body.get("top_p", 0.9),
+                    "stop_sequences": body.get("stop", []),
+                    **({"system": str(system_message)} if system_message else {}),
+                    "stream": body.get("stream", False),
+                }
 
             if body.get("stream", False):
                 return self.stream_response(payload)
@@ -144,7 +205,9 @@ class Pipeline:
             return f"Error: {e}"
 
     def stream_response(self, payload: dict) -> Generator:
-        response = requests.post(self.url, headers=self.headers, json=payload, stream=True)
+        response = requests.post(
+            self.url, headers=self.headers, json=payload, stream=True
+        )
 
         if response.status_code == 200:
             client = sseclient.SSEClient(response)
@@ -169,6 +232,8 @@ class Pipeline:
         response = requests.post(self.url, headers=self.headers, json=payload)
         if response.status_code == 200:
             res = response.json()
-            return res["content"][0]["text"] if "content" in res and res["content"] else ""
+            return (
+                res["content"][0]["text"] if "content" in res and res["content"] else ""
+            )
         else:
             raise Exception(f"Error: {response.status_code} - {response.text}")
