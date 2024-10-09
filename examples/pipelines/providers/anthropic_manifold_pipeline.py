@@ -1,5 +1,5 @@
 """
-title: Anthropic Manifold Pipeline
+title: Anthropic Manifold Pipeline with Prompt Caching Beta
 author: justinh-rahb, sriparashiva, rundown
 date: 2024-10-08
 version: 1.4
