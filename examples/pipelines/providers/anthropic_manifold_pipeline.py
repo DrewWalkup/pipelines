@@ -30,7 +30,6 @@ class Pipeline:
         self.type = "manifold"
         self.id = "anthropic"
         self.name = "anthropic/"
-        self.cached = False
 
         self.valves = self.Valves(
             **{"ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "your-api-key-here")}
@@ -109,7 +108,7 @@ class Pipeline:
             processed_messages = []
             image_count = 0
             total_image_size = 0
-            self.cached = False
+            cached = False
 
             for message in messages:
                 processed_content = []
@@ -122,7 +121,7 @@ class Pipeline:
                                 and self.get_tokens(item["text"]) >= 1024
                             ):
                                 text_content["cache_control"] = {"type": "ephemeral"}
-                                self.cached = True
+                                cached = True
                             processed_content.append(text_content)
                         elif item["type"] == "image_url":
                             if image_count >= 5:
@@ -155,7 +154,7 @@ class Pipeline:
                         and self.get_tokens(text) >= 1024
                     ):
                         text_content["cache_control"] = {"type": "ephemeral"}
-                        self.cached = True
+                        cached = True
                     processed_content = [text_content]
 
                 processed_messages.append(
@@ -175,11 +174,8 @@ class Pipeline:
                 "stream": body.get("stream", False),
             }
 
-            if self.cached:
-                payload["extra_headers"] = {
-                    "anthropic-version": "2023-06-01",
-                    "anthropic-beta": "prompt-caching-2024-07-31",
-                }
+            if cached:
+                self.headers["anthropic-beta"] = "prompt-caching-2024-07-31"
 
             if body.get("stream", False):
                 return self.stream_response(payload)
