@@ -63,7 +63,7 @@ class Pipeline:
         #    {"id": "claude-3-5-sonnet-20240620", "name": "claude-3.5-sonnet"},
         # ]
         return [
-            {"id": "claude-3-5-sonnet-20240620", "name": "claude-3.5-sonnet"},
+            {"id": "claude-3-5-sonnet-20241022", "name": "claude-3.5-sonnet"},
         ]
 
     async def on_startup(self):
@@ -121,7 +121,7 @@ class Pipeline:
                             # Check for caching
                             text_content = {"type": "text", "text": item["text"]}
                             if (
-                                model_id == "claude-3-5-sonnet-20240620"
+                                model_id == "claude-3-5-sonnet-20241022"
                                 and self.get_tokens(item["text"]) >= 1024
                             ):
                                 # Add cache type
@@ -156,7 +156,7 @@ class Pipeline:
                     text = message.get("content", "")
                     text_content = {"type": "text", "text": text}
                     if (
-                        model_id == "claude-3-5-sonnet-20240620"
+                        model_id == "claude-3-5-sonnet-20241022"
                         and self.get_tokens(text) >= 1024
                     ):
                         # Add cache type
