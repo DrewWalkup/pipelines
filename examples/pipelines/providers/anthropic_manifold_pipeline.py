@@ -181,9 +181,9 @@ class Pipeline:
                 "stream": body.get("stream", False),
             }
 
-            # Add caching headers
-            if cached:
-                self.headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+            # Add caching headers -- obsolete?
+            # if cached:
+            #    self.headers["anthropic-beta"] = "prompt-caching-2024-07-31"
 
             if body.get("stream", False):
                 return self.stream_response(payload)
