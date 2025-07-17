@@ -1,7 +1,7 @@
 """
 title: Anthropic Manifold Pipeline with Prompt Caching Beta
 author: justinh-rahb, sriparashiva, rundown
-date: 2024-10-08
+date: 2025-7-15
 version: 1.5
 license: MIT
 description: A pipeline for generating text and processing images using the Anthropic API.
@@ -56,15 +56,10 @@ class Pipeline:
         }
 
     def get_anthropic_models(self):
-        # all_models = [
-        #    {"id": "claude-3-haiku-20240307", "name": "claude-3-haiku"},
-        #    {"id": "claude-3-opus-20240229", "name": "claude-3-opus"},
-        #    {"id": "claude-3-sonnet-20240229", "name": "claude-3-sonnet"},
-        #    {"id": "claude-3-5-sonnet-20240620", "name": "claude-3.5-sonnet"},
-        # ]
         return [
-            {"id": "claude-3-5-sonnet-20241022", "name": "claude-3.5-sonnet"},
-            {"id": "claude-3-7-sonnet-20250219", "name": "claude-3.7-sonnet"},
+            {"id": "claude-3-7-sonnet-latest", "name": "claude-3.7-sonnet"},
+            {"id": "claude-sonnet-4-20250514", "name": "claude-4-sonnet"},
+            {"id": "claude-opus-4-20250514", "name": "claude-4-opus"},
         ]
 
     async def on_startup(self):
